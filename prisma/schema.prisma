@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  ADMIN
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  school       String?
+  role         Role     @default(STUDENT)
+  createdAt    DateTime @default(now())
+
+  lectures     Lecture[]      @relation("UploadedBy")
+  examSessions ExamSession[]
+}
+
+model Lecture {
+  id            String   @id @default(uuid())
+  title         String
+  subject       String
+  filePath      String
+  extractedText String?  @db.Text
+  uploadedBy    User     @relation("UploadedBy", fields: [uploadedById], references: [id])
+  uploadedById  String
+  createdAt     DateTime @default(now())
+
+  questions Question[]
+}
+
+model Question {
+  id            String     @id @default(uuid())
+  lecture       Lecture    @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+  lectureId     String
+  questionText  String     @db.Text
+  options       Json
+  correctAnswer String
+  explanation   String?    @db.Text
+  difficulty    Difficulty @default(MEDIUM)
+  createdAt     DateTime   @default(now())
+
+  examAnswers ExamAnswer[]
+}
+
+model ExamSession {
+  id              String    @id @default(uuid())
+  user            User      @relation(fields: [userId], references: [id])
+  userId          String
+  title           String
+  durationMinutes Int
+  startedAt       DateTime  @default(now())
+  endedAt         DateTime?
+  score           Float?
+
+  answers ExamAnswer[]
+}
+
+model ExamAnswer {
+  id            String      @id @default(uuid())
+  examSession   ExamSession @relation(fields: [examSessionId], references: [id], onDelete: Cascade)
+  examSessionId String
+  question      Question    @relation(fields: [questionId], references: [id])
+  questionId    String
+  selectedAnswer String?
+  isCorrect     Boolean?
+}
