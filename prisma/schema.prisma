@@ -25,6 +25,7 @@ model User {
   name         String
   school       String?
   role         Role     @default(STUDENT)
+  isPremium    Boolean  @default(false)
   createdAt    DateTime @default(now())
 
   lectures     Lecture[]      @relation("UploadedBy")

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MedPrep Chart — Admin</title>
+<style>
+  :root{
+    --navy:#0F2A47;
+    --navy-deep:#081A2E;
+    --teal:#2E9CB5;
+    --pulse:#3CD68C;
+    --red:#E85D4C;
+    --paper:#FAF6EE;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background:var(--navy-deep);
+    color:#fff;
+    min-height:100vh;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:32px 16px;
+  }
+  .card{
+    width:100%;
+    max-width:420px;
+    background:var(--navy);
+    border-radius:16px;
+    padding:28px 24px;
+    box-shadow:0 20px 50px rgba(0,0,0,0.4);
+  }
+  h1{
+    font-size:1.3rem;
+    margin:0 0 4px;
+  }
+  .sub{
+    color:rgba(255,255,255,0.6);
+    font-size:0.85rem;
+    margin-bottom:24px;
+  }
+  label{
+    display:block;
+    font-size:0.78rem;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--teal);
+    margin-bottom:6px;
+    margin-top:18px;
+  }
+  input{
+    width:100%;
+    padding:12px 14px;
+    border-radius:8px;
+    border:1px solid rgba(255,255,255,0.15);
+    background:rgba(255,255,255,0.05);
+    color:#fff;
+    font-size:1rem;
+  }
+  input:focus{
+    outline:none;
+    border-color:var(--pulse);
+  }
+  .row{
+    display:flex;
+    gap:10px;
+    margin-top:20px;
+  }
+  button{
+    flex:1;
+    padding:13px;
+    border-radius:8px;
+    border:none;
+    font-weight:600;
+    font-size:0.95rem;
+    cursor:pointer;
+  }
+  .btn-upgrade{ background:var(--pulse); color:var(--navy-deep); }
+  .btn-lookup{ background:rgba(255,255,255,0.1); color:#fff; }
+  .btn-downgrade{ background:var(--red); color:#fff; }
+  #result{
+    margin-top:20px;
+    padding:14px;
+    border-radius:8px;
+    font-size:0.9rem;
+    line-height:1.5;
+    display:none;
+    white-space:pre-wrap;
+  }
+  .ok{ background:rgba(60,214,140,0.15); border:1px solid var(--pulse); color:#c8ffe4; }
+  .err{ background:rgba(232,93,76,0.15); border:1px solid var(--red); color:#ffd6d0; }
+  .lock-note{
+    font-size:0.78rem;
+    color:rgba(255,255,255,0.4);
+    margin-top:24px;
+    text-align:center;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>MedPrep Chart — Admin</h1>
+    <div class="sub">Manually upgrade a student to premium after confirming payment.</div>
+
+    <label>Admin password</label>
+    <input id="secret" type="password" placeholder="Your admin password" autocomplete="off">
+
+    <label>Student email</label>
+    <input id="email" type="email" placeholder="student@example.com" autocomplete="off">
+
+    <div class="row">
+      <button class="btn-lookup" onclick="lookup()">Check status</button>
+      <button class="btn-upgrade" onclick="upgrade()">Make premium</button>
+    </div>
+    <div class="row">
+      <button class="btn-downgrade" onclick="downgrade()" style="flex:1;">Remove premium</button>
+    </div>
+
+    <div id="result"></div>
+
+    <div class="lock-note">This page only works with the correct admin password, set on the server. Bookmark this page — it's not linked from anywhere public.</div>
+  </div>
+
+<script>
+function showResult(text, isError) {
+  const el = document.getElementById('result');
+  el.style.display = 'block';
+  el.className = isError ? 'err' : 'ok';
+  el.textContent = text;
+}
+
+async function call(path) {
+  const secret = document.getElementById('secret').value.trim();
+  const email = document.getElementById('email').value.trim();
+  if (!secret) { showResult('Enter the admin password first.', true); return; }
+  if (!email) { showResult('Enter the student\'s email first.', true); return; }
+
+  try {
+    const res = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret, email })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showResult(data.error || 'Something went wrong.', true);
+      return;
+    }
+    if (data.message) {
+      showResult(data.message, false);
+    } else {
+      showResult(
+        `Name: ${data.name}\nEmail: ${data.email}\nSchool: ${data.school || '—'}\nPremium: ${data.isPremium ? 'Yes' : 'No'}\nJoined: ${new Date(data.createdAt).toLocaleDateString()}`,
+        false
+      );
+    }
+  } catch (err) {
+    showResult('Could not reach the server. Check your internet connection.', true);
+  }
+}
+
+function lookup() { call('/api/admin/lookup'); }
+function upgrade() { call('/api/admin/upgrade'); }
+function downgrade() { call('/api/admin/downgrade'); }
+</script>
+</body>
+</html>

@@ -30,7 +30,7 @@ async function register(req, res) {
     const token = signToken(user);
     res.status(201).json({
       token,
-      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      user: { id: user.id, email: user.email, name: user.name, role: user.role, isPremium: user.isPremium },
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to register", details: err.message });
@@ -49,7 +49,7 @@ async function login(req, res) {
     const token = signToken(user);
     res.json({
       token,
-      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      user: { id: user.id, email: user.email, name: user.name, role: user.role, isPremium: user.isPremium },
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to login", details: err.message });
@@ -59,7 +59,7 @@ async function login(req, res) {
 async function me(req, res) {
   const user = await prisma.user.findUnique({ where: { id: req.user.id } });
   if (!user) return res.status(404).json({ error: "User not found" });
-  res.json({ id: user.id, email: user.email, name: user.name, role: user.role, school: user.school });
+  res.json({ id: user.id, email: user.email, name: user.name, role: user.role, school: user.school, isPremium: user.isPremium });
 }
 
 module.exports = { register, login, me };
