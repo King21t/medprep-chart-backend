@@ -13,8 +13,18 @@ const storage = multer.diskStorage({
 });
 
 function fileFilter(req, file, cb) {
-  if (file.mimetype !== "application/pdf") {
-    return cb(new Error("Only PDF files are allowed"));
+  const allowed = [
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation", // .pptx
+  ];
+
+  if (file.mimetype === "application/vnd.ms-powerpoint") {
+    // legacy binary .ppt — not parseable by our text extractor
+    return cb(new Error("Legacy .ppt files aren't supported. Please re-save it as .pptx (PowerPoint: File > Save As > .pptx) and upload again."));
+  }
+
+  if (!allowed.includes(file.mimetype)) {
+    return cb(new Error("Only PDF or PPTX files are allowed"));
   }
   cb(null, true);
 }
