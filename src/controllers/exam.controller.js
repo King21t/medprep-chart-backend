@@ -3,6 +3,19 @@ const prisma = require("../config/db");
 // Create a new timed exam session by pulling a random set of questions
 async function createExam(req, res) {
   try {
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    if (!user.isPremium) {
+      const priorExams = await prisma.examSession.count({ where: { userId: user.id } });
+      if (priorExams >= 1) {
+        return res.status(403).json({
+          error: "The free plan includes 1 timed exam simulation. Upgrade to Premium for unlimited exams.",
+          code: "PREMIUM_REQUIRED",
+        });
+      }
+    }
+
     const { title, lectureIds, numQuestions = 20, durationMinutes = 30 } = req.body;
 
     const questions = await prisma.question.findMany({
