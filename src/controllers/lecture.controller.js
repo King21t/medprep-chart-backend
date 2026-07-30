@@ -1,25 +1,47 @@
 const fs = require("fs");
+const path = require("path");
 const pdfParse = require("pdf-parse");
+const officeParser = require("officeparser");
 const prisma = require("../config/db");
 const { generateQuestions } = require("../services/aiService");
 
+async function extractText(filePath, originalName) {
+  const ext = path.extname(originalName).toLowerCase();
+
+  if (ext === ".pdf") {
+    const buffer = fs.readFileSync(filePath);
+    const parsed = await pdfParse(buffer);
+    return parsed.text;
+  }
+
+  if (ext === ".pptx") {
+    // officeParser reads slide text (titles, bullet points, notes) from the .pptx XML
+    return officeParser.parseOfficeAsync(filePath);
+  }
+
+  throw new Error(`Unsupported file type: ${ext}`);
+}
+
 async function uploadLecture(req, res) {
   try {
-    if (!req.file) return res.status(400).json({ error: "No PDF file uploaded" });
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
     const { title, subject } = req.body;
     if (!title || !subject) {
       return res.status(400).json({ error: "title and subject are required" });
     }
 
-    const buffer = fs.readFileSync(req.file.path);
-    const parsed = await pdfParse(buffer);
+    const extractedText = await extractText(req.file.path, req.file.originalname);
+
+    if (!extractedText || !extractedText.trim()) {
+      return res.status(400).json({ error: "Couldn't extract any readable text from this file" });
+    }
 
     const lecture = await prisma.lecture.create({
       data: {
         title,
         subject,
         filePath: req.file.filename,
-        extractedText: parsed.text,
+        extractedText,
         uploadedById: req.user.id,
       },
     });
