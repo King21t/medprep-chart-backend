@@ -118,10 +118,57 @@
     <div class="row">
       <button class="btn-downgrade" onclick="downgrade()" style="flex:1;">Remove premium</button>
     </div>
+    <div class="row">
+      <button class="btn-lookup" onclick="promote()" style="flex:1; background:rgba(255,255,255,0.1);">Make admin (needed to upload decks)</button>
+    </div>
 
     <div id="result"></div>
 
     <div class="lock-note">This page only works with the correct admin password, set on the server. Bookmark this page — it's not linked from anywhere public.</div>
+  </div>
+
+  <div class="card" style="margin-top:20px;">
+    <h1>Upload lecture decks</h1>
+    <div class="sub">Sign in with your admin account, then upload a PDF or PPTX and generate practice questions from it.</div>
+
+    <label>Your email</label>
+    <input id="login-email" type="email" placeholder="you@example.com" autocomplete="off">
+
+    <label>Your password</label>
+    <input id="login-password" type="password" placeholder="Your account password" autocomplete="off">
+
+    <div class="row">
+      <button class="btn-lookup" onclick="adminLogin()" style="flex:1;">Sign in</button>
+    </div>
+
+    <div id="login-status" style="margin-top:14px; font-size:0.85rem; color:rgba(255,255,255,0.6);">Not signed in yet.</div>
+
+    <div id="upload-section" style="display:none;">
+      <label>Deck title</label>
+      <input id="lecture-title" type="text" placeholder="e.g. Elbow Joint" autocomplete="off">
+
+      <label>Subject</label>
+      <input id="lecture-subject" type="text" placeholder="e.g. Anatomy" autocomplete="off">
+
+      <label>File (.pdf or .pptx)</label>
+      <input id="lecture-file" type="file" accept=".pdf,.pptx">
+
+      <div class="row">
+        <button class="btn-upgrade" onclick="uploadLecture()" style="flex:1;">Upload deck</button>
+      </div>
+
+      <div id="upload-result" style="margin-top:16px; display:none;"></div>
+
+      <div id="generate-section" style="display:none; margin-top:10px;">
+        <label>Number of questions</label>
+        <input id="question-count" type="number" value="20" min="5" max="50">
+        <div class="row">
+          <button class="btn-upgrade" onclick="generateQuestions()" style="flex:1;">Generate questions</button>
+        </div>
+      </div>
+
+      <div id="generate-result" style="margin-top:16px; display:none;"></div>
+    </div>
   </div>
 
 <script>
@@ -165,6 +212,141 @@ async function call(path) {
 function lookup() { call('/api/admin/lookup'); }
 function upgrade() { call('/api/admin/upgrade'); }
 function downgrade() { call('/api/admin/downgrade'); }
+function promote() { call('/api/admin/promote'); }
+
+/* ---------- login to get a JWT for lecture uploads ---------- */
+var adminToken = null;
+
+async function adminLogin(){
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const statusEl = document.getElementById('login-status');
+
+  if(!email || !password){
+    statusEl.textContent = 'Enter your email and password.';
+    statusEl.style.color = '#ffd6d0';
+    return;
+  }
+
+  statusEl.textContent = 'Signing in…';
+  statusEl.style.color = 'rgba(255,255,255,0.6)';
+
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if(!res.ok){
+      statusEl.textContent = data.error || 'Login failed.';
+      statusEl.style.color = '#ffd6d0';
+      return;
+    }
+    if(data.user.role !== 'ADMIN'){
+      statusEl.textContent = 'Signed in, but this account is not an admin yet. Use "Make admin" above first, then sign in again.';
+      statusEl.style.color = '#ffd6d0';
+      return;
+    }
+    adminToken = data.token;
+    statusEl.textContent = 'Signed in as ' + data.user.name + ' (admin). You can upload decks now.';
+    statusEl.style.color = '#c8ffe4';
+    document.getElementById('upload-section').style.display = 'block';
+  } catch (err) {
+    statusEl.textContent = 'Could not reach the server.';
+    statusEl.style.color = '#ffd6d0';
+  }
+}
+
+/* ---------- upload a lecture deck ---------- */
+var lastUploadedLectureId = null;
+
+async function uploadLecture(){
+  const title = document.getElementById('lecture-title').value.trim();
+  const subject = document.getElementById('lecture-subject').value.trim();
+  const fileInput = document.getElementById('lecture-file');
+  const resultEl = document.getElementById('upload-result');
+
+  resultEl.style.display = 'block';
+
+  if(!title || !subject){
+    resultEl.className = 'err';
+    resultEl.textContent = 'Enter both a title and a subject.';
+    return;
+  }
+  if(!fileInput.files || fileInput.files.length === 0){
+    resultEl.className = 'err';
+    resultEl.textContent = 'Choose a .pdf or .pptx file.';
+    return;
+  }
+
+  resultEl.className = '';
+  resultEl.style.color = 'rgba(255,255,255,0.6)';
+  resultEl.textContent = 'Uploading and extracting text — this can take a moment for big decks…';
+
+  const formData = new FormData();
+  formData.append('title', title);
+  formData.append('subject', subject);
+  formData.append('file', fileInput.files[0]);
+
+  try {
+    const res = await fetch('/api/lectures', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + adminToken },
+      body: formData
+    });
+    const data = await res.json();
+    if(!res.ok){
+      resultEl.className = 'err';
+      resultEl.textContent = data.error || 'Upload failed.';
+      return;
+    }
+    lastUploadedLectureId = data.id;
+    resultEl.className = 'ok';
+    resultEl.textContent = '"' + data.title + '" uploaded successfully. Now generate questions for it below.';
+    document.getElementById('generate-section').style.display = 'block';
+  } catch (err) {
+    resultEl.className = 'err';
+    resultEl.textContent = 'Could not reach the server.';
+  }
+}
+
+/* ---------- generate practice questions for the uploaded deck ---------- */
+async function generateQuestions(){
+  const count = parseInt(document.getElementById('question-count').value, 10) || 20;
+  const resultEl = document.getElementById('generate-result');
+
+  if(!lastUploadedLectureId){
+    resultEl.style.display = 'block';
+    resultEl.className = 'err';
+    resultEl.textContent = 'Upload a deck first.';
+    return;
+  }
+
+  resultEl.style.display = 'block';
+  resultEl.className = '';
+  resultEl.style.color = 'rgba(255,255,255,0.6)';
+  resultEl.textContent = 'Generating ' + count + ' questions with AI — this can take 10-30 seconds…';
+
+  try {
+    const res = await fetch('/api/lectures/' + lastUploadedLectureId + '/generate-questions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+      body: JSON.stringify({ count })
+    });
+    const data = await res.json();
+    if(!res.ok){
+      resultEl.className = 'err';
+      resultEl.textContent = data.error || 'Question generation failed.';
+      return;
+    }
+    resultEl.className = 'ok';
+    resultEl.textContent = data.count + ' questions generated and saved. Ready for students to practice.';
+  } catch (err) {
+    resultEl.className = 'err';
+    resultEl.textContent = 'Could not reach the server.';
+  }
+}
 </script>
 </body>
 </html>
