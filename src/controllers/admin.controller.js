@@ -63,4 +63,20 @@ async function downgradeUser(req, res) {
   res.json({ message: `${user.name} (${user.email}) is back to free.`, isPremium: user.isPremium });
 }
 
-module.exports = { findUserByEmail, upgradeUser, downgradeUser };
+async function promoteToAdmin(req, res) {
+  if (!checkSecret(req, res)) return;
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: "email is required" });
+
+  const existing = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+  if (!existing) return res.status(404).json({ error: "No account found with that email — sign up in the app first." });
+
+  const user = await prisma.user.update({
+    where: { email: email.trim().toLowerCase() },
+    data: { role: "ADMIN" },
+  });
+
+  res.json({ message: `${user.name} (${user.email}) is now an admin. Log out and back in for it to take effect.`, role: user.role });
+}
+
+module.exports = { findUserByEmail, upgradeUser, downgradeUser, promoteToAdmin };
